@@ -29,3 +29,31 @@ MoneyPuck pre-computed xG values were unavailable in this dataset, so xG was der
 A logistic regression model trained on 400,000+ 5v5 shot attempts achieved **AUC = 0.801** at predicting whether a shot results in a goal - comparable to published xG models.
 
 ### Step 2: Aggregate to Game Level
+For each game, first-period 5v5 shots are aggregated into two ratio features:
+- `home_shot_ratio` = home shots / total shots
+- `home_xg_ratio` = home xG / total xG
+
+Ratios are used rather than raw counts to control for variation in game pace.
+
+### Step 3: Compare Predictive Models
+Three logistic regression models are evaluated via 5-fold cross-validation predicting binary game outcome (home win / loss):
+
+1. Shot ratio only
+2. xG ratio only
+3. Both combined
+
+### Data
+
+- **Source:** NHL API + MoneyPuck (2022, 2023, 2024 regular seasons)
+- **Scope:** 3,936 regular season games, ~400,000 5v5 shot attempts
+- **Filtered to:** 5v5 strength state only (excludes power plays, pulled goalie, overtime)
+- **Storage:** PostgreSQL
+
+## Stack
+
+- **Python** - pandas, scikit-learn, matplotlib, SQLAlchemy
+- **PostgreSQL** - shot-level and game-level data
+- **Models** - Logistic Regression (sklearn)
+
+## Limitations
+
