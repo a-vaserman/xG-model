@@ -67,3 +67,7 @@ Three logistic regression models are evaluated via 5-fold cross-validation predi
 
 ## Limitations
 
+The conclusion that xG outperforms Corsi is consistent with established hockey analytics literature (MoneyPuck, Evolving Hockey, Manny Perry et al.). This project's contribution is a **reproducible implementation** with a specific first-period temporal framing and a from-scratch xG model built without pre-computed values.
+
+Known constraints:
+- 
