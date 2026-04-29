@@ -3,7 +3,9 @@ Does shot quality beat shot quantity at predicting NHL winners and how early can
 
 This project builds a custom expected goals (xG) model from shot-level data and compares its predictive power against raw shot volume using only **first-period 5v5 data** across 3,936 regular season games (2022-2024).
 
-## Findings
+---
+
+## Finding
 | Model | AUC |
 |---|---|
 | Shot Ratio (Corsi) | 0.585 |
@@ -15,6 +17,8 @@ This project builds a custom expected goals (xG) model from shot-level data and 
 Both metrics have modest standalone predictive power (0.58-0.61), which is itself meaningful: first-period possession metrics are necessary but insufficient signals of team quality. Hockey is a high-variance sport and a single period rarely tells the full story.
 
 <img width="1200" height="900" alt="roc_curve" src="https://github.com/user-attachments/assets/8a63cd5a-33af-4fe6-bfd1-fce76334bc9e" />
+
+---
 
 ## How It Works
 
@@ -42,6 +46,8 @@ Three logistic regression models are evaluated via 5-fold cross-validation predi
 2. xG ratio only
 3. Both combined
 
+---
+
 ### Data
 
 - **Source:** NHL API + MoneyPuck (2022, 2023, 2024 regular seasons)
@@ -49,11 +55,15 @@ Three logistic regression models are evaluated via 5-fold cross-validation predi
 - **Filtered to:** 5v5 strength state only (excludes power plays, pulled goalie, overtime)
 - **Storage:** PostgreSQL
 
+---
+
 ## Stack
 
 - **Python** - pandas, scikit-learn, matplotlib, SQLAlchemy
 - **PostgreSQL** - shot-level and game-level data
 - **Models** - Logistic Regression (sklearn)
+
+---
 
 ## Limitations
 
