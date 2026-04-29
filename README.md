@@ -16,4 +16,6 @@ Both metrics have modest standalone predictive power (0.58-0.61), which is itsel
 
 <img width="1200" height="900" alt="roc_curve" src="https://github.com/user-attachments/assets/8a63cd5a-33af-4fe6-bfd1-fce76334bc9e" />
 
+## How It Works
 
+### Step 1: Build a Custom xG Model
