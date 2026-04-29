@@ -70,4 +70,16 @@ Three logistic regression models are evaluated via 5-fold cross-validation predi
 The conclusion that xG outperforms Corsi is consistent with established hockey analytics literature (MoneyPuck, Evolving Hockey, Manny Perry et al.). This project's contribution is a **reproducible implementation** with a specific first-period temporal framing and a from-scratch xG model built without pre-computed values.
 
 Known constraints:
-- 
+- `is_rush` was unpopulated in this dataset and excluded from the xG model
+- First-period sample sizes are small relative to full-game data - predictive power would increase using full-game metrics
+- No goalie quality adjustment - save percentage variance is a meaningful cofounder not captured here
+- Three seasons is sufficient for team-level analysis but limits individual player inference
+
+---
+
+## Files
+
+| File | Description |
+|---|---|
+| `nhl_xg_model.py` | Full pipeline: xG model, game aggregation, logistic regression comparison, ROC curve |
+| `roc_curve.png` | ROC curve comparing all three models |
