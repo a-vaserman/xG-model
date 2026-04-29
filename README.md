@@ -14,3 +14,6 @@ This project builds a custom expected goals (xG) model from shot-level data and 
 
 Both metrics have modest standalone predictive power (0.58-0.61), which is itself meaningful: first-period possession metrics are necessary but insufficient signals of team quality. Hockey is a high-variance sport and a single period rarely tells the full story.
 
+<img width="1200" height="900" alt="roc_curve" src="https://github.com/user-attachments/assets/8a63cd5a-33af-4fe6-bfd1-fce76334bc9e" />
+
+
