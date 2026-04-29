@@ -19,3 +19,13 @@ Both metrics have modest standalone predictive power (0.58-0.61), which is itsel
 ## How It Works
 
 ### Step 1: Build a Custom xG Model
+
+MoneyPuck pre-computed xG values were unavailable in this dataset, so xG was derived from first principles using shot features:
+- **Shot distance to goal** (calculated from x/y coordinates)
+- **Shot angle** to goal
+- **Shot type** (wrist, backhand, tip-in, slap, etc.)
+- **Rebound flag**
+
+A logistic regression model trained on 400,000+ 5v5 shot attempts achieved **AUC = 0.801** at predicting whether a shot results in a goal - comparable to published xG models.
+
+### Step 2: Aggregate to Game Level
