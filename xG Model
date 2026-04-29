@@ -1,0 +1,213 @@
+import pandas as pd
+import numpy as np
+from sqlalchemy import create_engine
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.metrics import RocCurveDisplay
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+engine = create_engine('postgresql://postgres:vaserman@localhost:5432/nhl_model')
+
+shots = pd.read_sql("""
+    SELECT 
+        shot_id,
+        game_id,
+        period,
+        shooting_team,
+        x_coord,
+        y_coord,
+        shot_type,
+        event_type,
+        is_goal,
+        is_rebound,
+        strength_state,
+        score_diff
+    FROM shots
+    WHERE x_coord IS NOT NULL
+    AND y_coord IS NOT NULL
+    AND strength_state = '5v5'
+""", engine)
+
+# Calculate distance and angle to goal
+# NHL goal is at x=89, y=0 (adjust for direction)
+shots['x_abs'] = shots['x_coord'].abs()
+shots['dist_to_goal'] = np.sqrt((89 - shots['x_abs'])**2 + shots['y_coord']**2)
+shots['angle_to_goal'] = np.abs(np.degrees(np.arctan2(shots['y_coord'], (89 - shots['x_abs']))))
+
+print(shots[['dist_to_goal', 'angle_to_goal', 'is_goal']].describe())
+print('\nGoal rate:', shots['is_goal'].mean().round(4))
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score
+import pandas as pd
+import numpy as np
+
+# Encode categorical variables
+shots['is_goal'] = shots['is_goal'].astype(int)
+shots['is_rebound'] = shots['is_rebound'].astype(int)
+
+# One-hot encode shot type
+shot_dummies = pd.get_dummies(shots['shot_type'], prefix='shot', drop_first=True)
+shots = pd.concat([shots, shot_dummies], axis=1)
+
+# Build feature matrix
+feature_cols = ['dist_to_goal', 'angle_to_goal', 'is_rebound'] + \
+               [c for c in shots.columns if c.startswith('shot_' )and c != 'shot_type']
+
+X = shots[feature_cols].fillna(0).astype(float)
+y = shots['is_goal']
+
+# Scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Train logistic regression xG model
+xg_model = LogisticRegression(max_iter=1000)
+xg_model.fit(X_scaled, y)
+
+# Evaluate with cross-validation
+cv_scores = cross_val_score(xg_model, X_scaled, y, cv=5, scoring='roc_auc')
+print('xG Model AUC (5-fold CV):', cv_scores.round(3))
+print('Mean AUC:', cv_scores.mean().round(3))
+
+# Assign xG probability back to each shot
+shots['xg'] = xg_model.predict_proba(X_scaled)[:, 1]
+
+# Assign xG back to shots dataframe
+shots['xg'] = xg_model.predict_proba(X_scaled)[:, 1]
+
+# Load games table
+games = pd.read_sql("""
+    SELECT game_id, home_team, away_team, home_win, 
+           went_to_ot, went_to_so, home_rest_days, 
+           away_rest_days, home_b2b, away_b2b, season
+    FROM games
+    WHERE game_type = '02'
+""", engine)
+
+# Aggregate first period shots and xG per game
+p1_shots = shots[shots['period'] == 1].copy()
+
+home_stats = p1_shots.groupby(['game_id', 'shooting_team']).agg(
+    shots=('shot_id', 'count'),
+    xg=('xg', 'sum')
+).reset_index()
+
+# Merge home and away stats onto games
+modeling_df = games.copy()
+
+for _, row in games.iterrows():
+    gid = row['game_id']
+    home = row['home_team']
+    away = row['away_team']
+
+modeling_df = modeling_df.merge(
+    home_stats.rename(columns={'shots': 'home_p1_shots', 'xg': 'home_p1_xg'}),
+    left_on=['game_id', 'home_team'],
+    right_on=['game_id', 'shooting_team'],
+    how='left'
+).drop(columns='shooting_team')
+
+modeling_df = modeling_df.merge(
+    home_stats.rename(columns={'shots': 'away_p1_shots', 'xg': 'away_p1_xg'}),
+    left_on=['game_id', 'away_team'],
+    right_on=['game_id', 'shooting_team'],
+    how='left'
+).drop(columns='shooting_team')
+
+# Build ratio features
+modeling_df['home_shot_ratio'] = (
+    modeling_df['home_p1_shots'] / 
+    (modeling_df['home_p1_shots'] + modeling_df['away_p1_shots'])
+)
+modeling_df['home_xg_ratio'] = (
+    modeling_df['home_p1_xg'] / 
+    (modeling_df['home_p1_xg'] + modeling_df['away_p1_xg'])
+)
+
+print(modeling_df[['home_shot_ratio', 'home_xg_ratio', 'home_win']].describe().round(3))
+print('\nNulls:', modeling_df[['home_shot_ratio', 'home_xg_ratio']].isnull().sum())
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import StandardScaler
+
+# Drop the one null row
+model_data = modeling_df.dropna(subset=['home_shot_ratio', 'home_xg_ratio'])
+
+# Convert home_win to int
+model_data['home_win'] = model_data['home_win'].astype(int)
+
+y = model_data['home_win']
+
+# Model 1: Shot ratio only
+X_shots = model_data[['home_shot_ratio']]
+auc_shots = cross_val_score(
+    LogisticRegression(), X_shots, y, cv=5, scoring='roc_auc'
+).mean()
+
+# Model 2: xG ratio only
+X_xg = model_data[['home_xg_ratio']]
+auc_xg = cross_val_score(
+    LogisticRegression(), X_xg, y, cv=5, scoring='roc_auc'
+).mean()
+
+# Model 3: Both combined
+X_both = model_data[['home_shot_ratio', 'home_xg_ratio']]
+auc_both = cross_val_score(
+    LogisticRegression(), X_both, y, cv=5, scoring='roc_auc'
+).mean()
+
+print(f'Shot Ratio AUC:      {auc_shots:.3f}')
+print(f'xG Ratio AUC:        {auc_xg:.3f}')
+print(f'Combined AUC:        {auc_both:.3f}')
+print(f'\nxG improvement over shots: {(auc_xg - auc_shots):.3f}')
+
+fig, ax = plt.subplots(figsize=(8, 6))
+ 
+models = {
+    'Shot Ratio': (model_data[['home_shot_ratio']], '#1f77b4'),
+    'xG Ratio':   (model_data[['home_xg_ratio']],   '#ff7f0e'),
+    'Combined':   (model_data[['home_shot_ratio', 'home_xg_ratio']], '#2ca02c'),
+}
+ 
+mean_fpr = np.linspace(0, 1, 100)
+ 
+for label, (X, color) in models.items():
+    tprs = []
+    cv = StratifiedKFold(n_splits=5)
+    for train_idx, test_idx in cv.split(X, y):
+        clf = LogisticRegression()
+        clf.fit(X.iloc[train_idx], y.iloc[train_idx])
+        viz = RocCurveDisplay.from_estimator(
+            clf, X.iloc[test_idx], y.iloc[test_idx], ax=ax, alpha=0
+        )
+        tprs.append(np.interp(mean_fpr, viz.fpr, viz.tpr))
+    ax.plot(mean_fpr, np.mean(tprs, axis=0), color=color, lw=2)
+ 
+ax.plot([0, 1], [0, 1], 'k--', lw=1.5)
+ 
+# Clean legend — 4 entries only
+auc_labels = {
+    'Shot Ratio': auc_shots,
+    'xG Ratio': auc_xg,
+    'Combined': auc_both,
+}
+legend_elements = [
+    Line2D([0], [0], color=color, lw=2,
+           label=f"{label} (AUC = {auc_labels[label]:.3f})")
+    for label, (_, color) in models.items()
+] + [Line2D([0], [0], color='black', lw=1.5, linestyle='--',
+            label='Random (AUC = 0.500)')]
+ 
+ax.legend(handles=legend_elements, loc='lower right', fontsize=10)
+ax.set_xlabel('False Positive Rate')
+ax.set_ylabel('True Positive Rate')
+ax.set_title('Predicting NHL Game Winners from First Period Metrics')
+plt.tight_layout()
+plt.savefig('roc_curve.png', dpi=150)
+plt.show()
+print("\nSaved: roc_curve.png")
