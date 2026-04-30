@@ -82,4 +82,4 @@ Known constraints:
 | File | Description |
 |---|---|
 | `nhl_xg_model.py` | Full pipeline: xG model, game aggregation, logistic regression comparison, ROC curve |
-| `roc_curve.png` | ROC curve comparing all three models |
+| `ROC Curve (NHL).png` | ROC curve comparing all three models |
